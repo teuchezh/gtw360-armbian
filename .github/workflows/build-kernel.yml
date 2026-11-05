@@ -1,0 +1,60 @@
+name: Build GTW360 kernel
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kernel-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kernel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out project
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Free runner disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+          free_kib=$(df -Pk . | awk 'NR == 2 {print $4}')
+          (( free_kib >= 25 * 1024 * 1024 ))
+
+      - name: Build kernel packages
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          TERM: xterm
+        run: |
+          sudo -E ./scripts/build-kernel.sh \
+            CPUTHREADS="$(nproc)" \
+            KERNEL_GIT=shallow \
+            KERNEL_GIT_SHA1=f45ed76d6791cf72ff1265ee93511175bbbc2f18 \
+            KERNEL_BTF=no \
+            ARTIFACT_IGNORE_CACHE=yes
+
+      - name: Verify and collect packages
+        run: |
+          python3 scripts/collect-kernel-artifacts.py \
+            --debs-dir sources/armbian/output/debs \
+            --output-dir artifacts/ci-kernel
+          cat artifacts/ci-kernel/BUILD-INFO.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload kernel packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gtw360-kernel-${{ github.run_number }}
+          path: artifacts/ci-kernel/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
