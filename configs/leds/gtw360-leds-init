@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+modprobe ledtrig-netdev
+set_network_led() {
+    led=/sys/class/leds/$1
+    printf netdev > "$led/trigger"
+    printf '%s' "$2" > "$led/device_name"
+    printf 1 > "$led/link"
+    printf 1 > "$led/rx"
+    printf 1 > "$led/tx"
+}
+set_network_led green eth0
+set_network_led blue wlan0
+printf none > /sys/class/leds/amber/trigger
+printf 0 > /sys/class/leds/amber/brightness
+printf panic > /sys/class/leds/amber/trigger

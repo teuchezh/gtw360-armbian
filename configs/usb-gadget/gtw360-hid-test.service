@@ -1,0 +1,13 @@
+[Unit]
+Description=GTW360 test USB keyboard and mouse
+After=sysinit.target
+ConditionPathExists=/sys/class/udc/ci_hdrc.0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gtw360-hid-test
+ExecStop=/usr/local/sbin/gtw360-hid-test --stop
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=Set GTW360 board LED indicators
+After=sysinit.target
+ConditionPathExists=/sys/class/leds/green/trigger
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gtw360-leds-init
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

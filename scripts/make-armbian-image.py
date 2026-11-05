@@ -177,6 +177,11 @@ RemainAfterExit=yes
     ):
         write(root, target, (project / 'configs/zigbee' / name).read_text(), mode)
     run('systemctl', '--root', root, 'enable', 'gtw360-zigbee.service')
+    write(root, 'usr/local/sbin/gtw360-leds-init',
+          (project / 'configs/leds/gtw360-leds-init').read_text(), 0o755)
+    write(root, 'etc/systemd/system/gtw360-leds.service',
+          (project / 'configs/leds/gtw360-leds.service').read_text())
+    run('systemctl', '--root', root, 'enable', 'gtw360-leds.service')
     mounts = []
     try:
         for target, args in [('dev', ['--bind', '/dev']), ('proc', ['-t', 'proc', 'proc']),
