@@ -1,0 +1,30 @@
+#!/bin/busybox sh
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mount -t tmpfs tmpfs /run
+exec </dev/console >/dev/console 2>&1
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+echo gtw360-rescue > /proc/sys/kernel/hostname
+ip link set lo up
+ip link set eth0 address @MAC_ADDRESS@
+ip addr add @IP_ADDRESS@ dev eth0
+ip link set eth0 up
+ip route add default via @GATEWAY@
+mkdir -p /dev/pts
+mount -t devpts devpts /dev/pts
+for module in nvmem_imx_ocotp imx6q_cpufreq nls_cp437 nls_iso8859_1 libcomposite usb_f_hid usb_f_mass_storage uvcvideo usb_storage imx2_wdt; do
+    /sbin/modprobe "$module" || true
+done
+mkdir -p /sys/kernel/config
+mount -t configfs configfs /sys/kernel/config || true
+if [ -c /dev/watchdog ]; then
+    /usr/sbin/rescue-watchdog &
+fi
+/usr/sbin/dropbear -R -s -E -p 22 -P /run/dropbear.pid
+echo 'GTW360 RAM diagnostics. SSH: root@@IP_HOST@ (rescue key only).'
+echo 'Use reboot -f to return to the configured boot path.'
+while :; do
+    /bin/ash -i </dev/console >/dev/console 2>&1
+    sleep 1
+done

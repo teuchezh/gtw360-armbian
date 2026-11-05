@@ -1,0 +1,5 @@
+serial:
+  port: /dev/zigbee
+  adapter: zstack
+  baudrate: 115200
+  rtscts: false

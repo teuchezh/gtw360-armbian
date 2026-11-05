@@ -1,0 +1,14 @@
+[Unit]
+Description=Initialize GTW360 u236 Zigbee module GPIOs
+After=systemd-udev-settle.service
+Before=zigbee2mqtt.service homed-zigbee.service
+ConditionPathExists=/dev/ttymxc3
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gtw360-zigbee-init
+RemainAfterExit=yes
+TimeoutStartSec=15
+
+[Install]
+WantedBy=multi-user.target

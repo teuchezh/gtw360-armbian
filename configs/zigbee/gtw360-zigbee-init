@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+# Release the replacement u236 CC2652 module; do not enter its bootloader.
+set_gpio_high() {
+    label=$1
+    offset=$2
+    for chip in /sys/class/gpio/gpiochip*; do
+        [ "$(cat "$chip/label")" = "$label" ] || continue
+        number=$(( $(cat "$chip/base") + offset ))
+        node=/sys/class/gpio/gpio$number
+        if [ ! -d "$node" ]; then printf '%s' "$number" > /sys/class/gpio/export; fi
+        printf high > "$node/direction"
+        return 0
+    done
+    echo "GPIO controller missing: $label" >&2
+    return 1
+}
+set_gpio_high 20ac000.gpio 4
+set_gpio_high 209c000.gpio 5
+# Mainline does not bind OpenWrt's gpio-export node, so select its reset pin group.
+mountpoint -q /sys/kernel/debug || mount -t debugfs debugfs /sys/kernel/debug
+printf 'gpiogrp pinctrl' > /sys/kernel/debug/pinctrl/20e0000.pinctrl/pinmux-select
+sleep 3
