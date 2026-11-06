@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-# Release the replacement u236 CC2652 module; do not enter its bootloader.
+# Prepare the board Zigbee boot/reset lines without a reset pulse.
 set_gpio_high() {
     label=$1
     offset=$2

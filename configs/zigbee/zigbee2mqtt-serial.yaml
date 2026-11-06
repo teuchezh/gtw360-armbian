@@ -1,3 +1,5 @@
+# Example for a module running Z-Stack coordinator firmware.
+# Select adapter and baudrate to match the installed firmware.
 serial:
   port: /dev/zigbee
   adapter: zstack

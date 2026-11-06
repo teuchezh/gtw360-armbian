@@ -1,5 +1,5 @@
 [Unit]
-Description=Initialize GTW360 u236 Zigbee module GPIOs
+Description=Initialize GTW360 Zigbee connector GPIOs
 After=systemd-udev-settle.service
 Before=zigbee2mqtt.service homed-zigbee.service
 ConditionPathExists=/dev/ttymxc3
