@@ -1,27 +1,6 @@
 name: Build GTW360 Armbian USB image
 on:
   workflow_dispatch:
-    inputs:
-      authorized_key:
-        description: SSH public key (ssh-ed25519), never a private key
-        required: true
-        type: string
-      address:
-        description: Device IPv4 address with prefix
-        required: true
-        type: string
-      gateway:
-        description: IPv4 gateway
-        required: true
-        type: string
-      dns:
-        description: IPv4 DNS server
-        required: true
-        type: string
-      mac:
-        description: Device Ethernet MAC address
-        required: true
-        type: string
 permissions:
   contents: read
 concurrency:
@@ -43,17 +22,10 @@ jobs:
           sudo update-binfmts --enable qemu-arm
       - name: Build and verify full USB image
         env:
-          GTW360_ADDRESS: ${{ inputs.address }}
-          GTW360_GATEWAY: ${{ inputs.gateway }}
-          GTW360_DNS: ${{ inputs.dns }}
-          GTW360_MAC: ${{ inputs.mac }}
-          PUBLIC_KEY: ${{ inputs.authorized_key }}
           TERM: xterm
           DEBIAN_FRONTEND: noninteractive
         run: |
           mkdir -p artifacts
-          printf '%s\n' "$PUBLIC_KEY" > artifacts/authorized-key.pub
-          export GTW360_AUTHORIZED_KEY="$PWD/artifacts/authorized-key.pub"
           sudo -E ./scripts/build-image.sh CPUTHREADS="$(nproc)" KERNEL_GIT=shallow KERNEL_GIT_SHA1=f45ed76d6791cf72ff1265ee93511175bbbc2f18 KERNEL_BTF=no ARTIFACT_IGNORE_CACHE=yes
           cd artifacts
           sha256sum gtw360-armbian-trixie-usb.img.xz > SHA256SUMS
