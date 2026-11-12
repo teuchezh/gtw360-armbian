@@ -212,6 +212,11 @@ RemainAfterExit=yes
     ):
         write(root, target, (project / 'configs/usb-gadget' / source).read_text(), mode)
     # Gadget stays disabled until explicitly enabled on the installed eMMC system.
+    write(root, 'root/install-kvm.sh',
+          (project / 'configs/kvm/install-kvm.sh').read_text(), 0o755)
+    for name in ('setup-runtime.sh', 'configure-web.py'):
+        write(root, 'usr/local/lib/gtw360/kvm/' + name,
+              (project / 'configs/kvm' / name).read_text(), 0o644)
     mounts = []
     try:
         for target, args in [('dev', ['--bind', '/dev']), ('proc', ['-t', 'proc', 'proc']),
