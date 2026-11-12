@@ -21,7 +21,8 @@ import uuid
 project = Path(__file__).resolve().parent.parent
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--rootfs-archive', required=True, type=Path)
-p.add_argument('--vendor-prefix', required=True, type=Path)
+p.add_argument('--vendor-prefix', type=Path)
+p.add_argument('--usb-only', action='store_true')
 p.add_argument('--authorized-key', required=True, type=Path)
 p.add_argument('--output-dir', required=True, type=Path)
 p.add_argument('--ip-address', required=True)
@@ -80,8 +81,11 @@ def region_hash(path, offset, size):
             size -= len(chunk)
     return digest.hexdigest()
 
-prefix = a.vendor_prefix.read_bytes()
-assert len(prefix) == 4 * mib and prefix[510:512] == b'\x55\xaa'
+if not a.usb_only and not a.vendor_prefix:
+    p.error('--vendor-prefix required unless --usb-only')
+prefix = a.vendor_prefix.read_bytes() if a.vendor_prefix else b''
+if prefix:
+    assert len(prefix) == 4 * mib and prefix[510:512] == b'\x55\xaa'
 key = a.authorized_key.read_text().strip() + '\n'
 assert key.startswith('ssh-ed25519 ')
 root_uuid = str(uuid.UUID(a.root_uuid)) if a.root_uuid else str(uuid.uuid4())
@@ -274,7 +278,7 @@ RemainAfterExit=yes
         '-O', '^orphan_file', '-d', root, root_image)
     run('e2fsck', '-f', '-n', root_image)
     root_hash = region_hash(root_image, 0, root_image.stat().st_size)
-    for kind in ('emmc', 'usb'):
+    for kind in (('usb',) if a.usb_only else ('emmc', 'usb')):
         fat = work / f'boot-{kind}.fat'
         with fat.open('wb') as f:
             f.truncate(256 * mib)

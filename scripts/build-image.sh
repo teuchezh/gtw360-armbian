@@ -14,7 +14,7 @@ cd "$project_dir/sources/armbian"
 cd "$project_dir"
 python3 scripts/make-armbian-image.py \
     --rootfs-archive artifacts/gtw360-armbian-rootfs.tar.zst \
-    --vendor-prefix backups/emmc-first-4MiB.bin \
-    --authorized-key backups/rescue-access.pub --output-dir artifacts \
+    --usb-only --authorized-key "${GTW360_AUTHORIZED_KEY:?Set GTW360_AUTHORIZED_KEY to a public key file}" \
+    --output-dir artifacts \
     --ip-address "$GTW360_ADDRESS" --gateway "$GTW360_GATEWAY" \
     --dns "$GTW360_DNS" --mac-address "$GTW360_MAC"

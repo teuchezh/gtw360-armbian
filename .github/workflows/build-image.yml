@@ -1,0 +1,70 @@
+name: Build GTW360 Armbian USB image
+on:
+  workflow_dispatch:
+    inputs:
+      authorized_key:
+        description: SSH public key (ssh-ed25519), never a private key
+        required: true
+        type: string
+      address:
+        description: Device IPv4 address with prefix
+        required: true
+        type: string
+      gateway:
+        description: IPv4 gateway
+        required: true
+        type: string
+      dns:
+        description: IPv4 DNS server
+        required: true
+        type: string
+      mac:
+        description: Device Ethernet MAC address
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Prepare runner
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static binfmt-support mtools dosfstools e2fsprogs u-boot-tools device-tree-compiler zstd
+          sudo update-binfmts --enable qemu-arm
+      - name: Build and verify full USB image
+        env:
+          GTW360_ADDRESS: ${{ inputs.address }}
+          GTW360_GATEWAY: ${{ inputs.gateway }}
+          GTW360_DNS: ${{ inputs.dns }}
+          GTW360_MAC: ${{ inputs.mac }}
+          PUBLIC_KEY: ${{ inputs.authorized_key }}
+          TERM: xterm
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          mkdir -p artifacts
+          printf '%s\n' "$PUBLIC_KEY" > artifacts/authorized-key.pub
+          export GTW360_AUTHORIZED_KEY="$PWD/artifacts/authorized-key.pub"
+          sudo -E ./scripts/build-image.sh CPUTHREADS="$(nproc)" KERNEL_GIT=shallow KERNEL_GIT_SHA1=f45ed76d6791cf72ff1265ee93511175bbbc2f18 KERNEL_BTF=no ARTIFACT_IGNORE_CACHE=yes
+          cd artifacts
+          sha256sum gtw360-armbian-trixie-usb.img.xz > SHA256SUMS
+      - name: Upload compressed image
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: gtw360-armbian-usb-${{ github.run_number }}
+          path: |
+            artifacts/gtw360-armbian-trixie-usb.img.xz
+            artifacts/gtw360-armbian-manifest.json
+            artifacts/SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7

@@ -9,7 +9,9 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--stop', action='store_true')
 args = parser.parse_args()
 gadget = Path('/sys/kernel/config/usb_gadget/gtw360-hid-test')
-udc = 'ci_hdrc.0'
+controllers = [u.name for u in Path('/sys/class/udc').glob('*')
+               if '2184000.usb' in str((u / 'device').resolve())]
+udc = controllers[0] if len(controllers) == 1 else ''
 if args.stop:
     if (gadget / 'UDC').exists():
         (gadget / 'UDC').write_text('\n')

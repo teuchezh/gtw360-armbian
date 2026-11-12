@@ -1,7 +1,7 @@
 [Unit]
 Description=GTW360 test USB keyboard and mouse
 After=sysinit.target
-ConditionPathExists=/sys/class/udc/ci_hdrc.0
+ConditionPathIsDirectory=/sys/class/udc
 
 [Service]
 Type=oneshot
