@@ -201,6 +201,10 @@ RemainAfterExit=yes
     write(root, 'etc/systemd/system/gtw360-leds.service',
           (project / 'configs/leds/gtw360-leds.service').read_text())
     run('systemctl', '--root', root, 'enable', 'gtw360-leds.service')
+    write(root, 'usr/local/sbin/gtw360-install',
+          (project / 'scripts/gtw360-install').read_text(), 0o755)
+    write(root, 'usr/local/lib/gtw360/make-fit.py',
+          (project / 'scripts/make-fit.py').read_text(), 0o755)
     mounts = []
     try:
         for target, args in [('dev', ['--bind', '/dev']), ('proc', ['-t', 'proc', 'proc']),
@@ -209,6 +213,10 @@ RemainAfterExit=yes
             assert path.is_dir() and not path.is_symlink()
             run('mount', *args, path)
             mounts.append(path)
+        run('chroot', root, '/usr/bin/apt-get', 'install', '-y', '--no-install-recommends',
+            'rsync', 'dosfstools', 'e2fsprogs', 'u-boot-tools', 'device-tree-compiler',
+            'libubootenv-tool', 'python3', 'util-linux',
+            env={**os.environ, 'DEBIAN_FRONTEND': 'noninteractive'})
         if a.kernel_deb:
             packages = root / 'tmp/gtw360-kernel-packages'
             packages.mkdir()

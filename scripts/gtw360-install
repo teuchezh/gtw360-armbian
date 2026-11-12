@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""Install the running GTW360 USB system to eMMC, preserving vendor boot areas."""
+from pathlib import Path
+import os
+import subprocess as sp
+import uuid
+import struct
+import tempfile
+import shutil
+
+
+def run(*args, **kw):
+    return sp.run(list(map(str,args)), check=True, **kw)
+
+
+def output(*args):
+    return run(*args, stdout=sp.PIPE, text=True).stdout.strip()
+
+
+def main():
+    if os.geteuid():
+        raise SystemExit('Run as root: sudo gtw360-install')
+    compatible=Path('/proc/device-tree/compatible').read_bytes()
+    if b'gtw360' not in compatible:
+        raise SystemExit('This installer supports GTW360 only')
+    target=Path('/dev/mmcblk1')
+    source=output('findmnt','-n','-o','SOURCE','/')
+    if not source.startswith('/dev/sd'):
+        raise SystemExit('Boot the USB image before installing')
+    if Path('/sys/class/block/mmcblk1/device/type').read_text().strip() != 'MMC':
+        raise SystemExit('Target is not eMMC')
+    if output('lsblk','-nr','-o','MOUNTPOINTS',target):
+        raise SystemExit('eMMC partitions must be unmounted')
+    for cmd in ['rsync','mkfs.vfat','mkfs.ext4','mkimage','dtc','fw_setenv','fw_printenv','blockdev']:
+        if not shutil.which(cmd):
+            raise SystemExit('Missing required tool: '+cmd)
+    size=int(output('blockdev','--getsize64',target))
+    if size < 4*1024**3:
+        raise SystemExit('eMMC is too small')
+    print('GTW360 eMMC installation. All eMMC partitions and their data will be erased.')
+    print('Factory bootloader, reserved first 4 MiB and boot0/boot1 are preserved.')
+    print('Target:',target,'bytes:',size)
+    if input('Type INSTALL to continue: ').strip() != 'INSTALL':
+        raise SystemExit('Cancelled')
+    backup=Path('/root/gtw360-emmc-backup')
+    if backup.exists():
+        raise SystemExit('Backup directory already exists; move it before retrying')
+    backup.mkdir(mode=0o700)
+    with target.open('rb') as f:
+        prefix=f.read(4*1024**2)
+    if prefix[510:512] != b'\x55\xaa':
+        raise SystemExit('Unexpected factory partition table')
+    (backup/'first-4MiB.bin').write_bytes(prefix)
+    for name in ['mmcblk1boot0','mmcblk1boot1']:
+        (backup/(name+'.bin')).write_bytes(Path('/dev',name).read_bytes())
+    cfg=backup/'fw_env.config'
+    cfg.write_text('/dev/mmcblk1 0x2fe000 0x2000 0x200\n/dev/mmcblk1 0x2fc000 0x2000 0x200\n')
+    env=output('fw_printenv','-c',cfg)
+    (backup/'uboot-env.txt').write_text(env+'\n')
+    if 'boot_targets=usb mmc' not in env:
+        raise SystemExit('Unsupported U-Boot environment; no partitions changed')
+    kernels=list(Path('/boot').glob('vmlinuz-*'))
+    if len(kernels)!=1 or len(list(Path('/boot').rglob('imx6ull-gtw360.dtb')))!=1:
+        raise SystemExit('Missing or ambiguous boot files; no partitions changed')
+    used=int(output('du','-sx','--block-size=1','/').split()[0])
+    if used > size - 1024**3:
+        raise SystemExit('Not enough room on eMMC; no partitions changed')
+    sectors=size//512
+    mbr=bytearray(prefix[:512]);mbr[446:510]=bytes(64)
+    for i,(start,count,kind) in enumerate([(8192,524288,12),(532480,sectors-532480,131)]):
+        mbr[446+i*16:462+i*16]=struct.pack('<B3sB3sII',0,b'\xfe\xff\xff',kind,b'\xfe\xff\xff',start,count)
+    rootid=str(uuid.uuid4());bootid=uuid.uuid4().hex[:8].upper()
+    work=Path(tempfile.mkdtemp(prefix='gtw360-install-',dir='/mnt'))
+    mounted=[]
+    try:
+        with target.open('r+b',buffering=0) as f:
+            f.write(mbr);os.fsync(f.fileno())
+        run('blockdev','--rereadpt',target);run('udevadm','settle')
+        run('mkfs.vfat','-F','32','-n','GTW_BOOT','-i',bootid,str(target)+'p1')
+        run('mkfs.ext4','-F','-m','1','-U',rootid,str(target)+'p2')
+        run('mount',str(target)+'p2',work);mounted.append(work)
+        (work/'boot').mkdir();run('mount',str(target)+'p1',work/'boot');mounted.append(work/'boot')
+        run('rsync','-aHAXx','--numeric-ids',*[f'--exclude=/{x}/***' for x in ['dev','proc','sys','run','tmp','mnt','media','boot']], '/',str(work)+'/')
+        for name in ['dev','proc','sys','run','tmp','mnt','media']:
+            (work/name).mkdir(exist_ok=True)
+        (work/'tmp').chmod(0o1777)
+        run('rsync','-rtL','/boot/',str(work/'boot')+'/')
+        kernels=list((work/'boot').glob('vmlinuz-*'))
+        if len(kernels)!=1: raise RuntimeError('Expected exactly one kernel')
+        kernel=kernels[0];version=kernel.name.removeprefix('vmlinuz-')
+        dtbs=list((work/'boot').rglob('imx6ull-gtw360.dtb'))
+        if len(dtbs)!=1: raise RuntimeError('Expected exactly one board DTB')
+        run('python3','/usr/local/lib/gtw360/make-fit.py','--kernel',kernel,'--dtb',dtbs[0],'--initrd',work/'boot'/('initrd.img-'+version),'--root','UUID='+rootid,'--output',work/'boot/fitImageA')
+        shutil.copyfile(work/'boot/fitImageA',work/'boot/fitImageB')
+        (work/'etc/fstab').write_text(f'UUID={rootid} / ext4 defaults,noatime 0 1\nUUID={bootid[:4]}-{bootid[4:]} /boot vfat defaults 0 2\n')
+        (work/'boot/armbianEnv.txt').write_text(f'rootdev=UUID={rootid}\nfdtfile=nxp/imx/imx6ull-gtw360.dtb\n')
+        cfg=backup/'fw_env.config';cfg.write_text('/dev/mmcblk1 0x2fe000 0x2000 0x200\n/dev/mmcblk1 0x2fc000 0x2000 0x200\n')
+        run('fw_setenv','-c',cfg,'boot_part','a')
+        run('sync')
+        print('Installation complete. Power off, remove USB drive, then power on.')
+        print('Boot-area backups:',backup)
+    finally:
+        for mount in reversed(mounted): run('umount',mount)
+        work.rmdir()
+
+if __name__=='__main__': main()
