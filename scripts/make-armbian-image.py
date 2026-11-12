@@ -205,6 +205,13 @@ RemainAfterExit=yes
           (project / 'scripts/gtw360-install').read_text(), 0o755)
     write(root, 'usr/local/lib/gtw360/make-fit.py',
           (project / 'scripts/make-fit.py').read_text(), 0o755)
+    for source, target, mode in (
+        ('usb-gadget.sh', 'root/usb-gadget.sh', 0o755),
+        ('gtw360-hid-test.py', 'usr/local/sbin/gtw360-hid-test', 0o755),
+        ('gtw360-hid-test.service', 'etc/systemd/system/gtw360-hid-test.service', 0o644),
+    ):
+        write(root, target, (project / 'configs/usb-gadget' / source).read_text(), mode)
+    # Gadget stays disabled until explicitly enabled on the installed eMMC system.
     mounts = []
     try:
         for target, args in [('dev', ['--bind', '/dev']), ('proc', ['-t', 'proc', 'proc']),
